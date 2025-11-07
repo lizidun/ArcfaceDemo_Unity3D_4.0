@@ -14,6 +14,8 @@ using System.Configuration;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 using TMPro;
 using UnityEngine;
@@ -22,11 +24,15 @@ using Button = UnityEngine.UI.Button;
 using Color = System.Drawing.Color;
 using Font = System.Drawing.Font;
 using FontStyle = System.Drawing.FontStyle;
+using Graphics = System.Drawing.Graphics;
 using Image = System.Drawing.Image;
 
 public class CameraTest : MonoBehaviour
 {
     public RawImage rawImage;
+
+    public RawImage rawImageDisplay;
+
     public TMP_Text webCamDisplayText;
     public Button btnStartVideo;
 
@@ -46,6 +52,13 @@ public class CameraTest : MonoBehaviour
         InitEnginesCustom();
 
         btnStartVideo_Click(new object(), new EventArgs());
+
+        //ChooseMultiImg(new object(), new EventArgs());
+    }
+
+    private void Update()
+    {
+        videoSource_Paint(new object(), new EventArgs());
     }
 
     //CAMERA 01 SELECT
@@ -67,18 +80,6 @@ public class CameraTest : MonoBehaviour
         }
         webCamDisplayText.text = "Camera Type: " + cam_devices[0].name.ToString();
     }
-
-    // Start is called before the first frame update
-    //void Start()
-    //{
-
-    //}
-
-    // Update is called once per frame
-    //void Update()
-    //{
-
-    //}
 
     public static Image Texture2Image(Texture2D texture)
     {
@@ -105,13 +106,16 @@ public class CameraTest : MonoBehaviour
         return bmp2;
     }
 
+    /// <summary>
+    /// 初始化引擎
+    /// </summary>
     private void InitEnginesCustom()
     {
         try
         {
-            webCamDisplayText.text += "    ";
+            webCamDisplayText.text += "初始化引擎";
 
-            //  ȡ     ļ 
+            //读取配置文件
             //AppSettingsReader reader = new AppSettingsReader();
             //rgbCameraIndex = (int)reader.GetValue("RGB_CAMERA_INDEX", typeof(int));
             //irCameraIndex = (int)reader.GetValue("IR_CAMERA_INDEX", typeof(int));
@@ -125,48 +129,48 @@ public class CameraTest : MonoBehaviour
             liveMatchTime = 20;
 
             int retCode = 0;
-            bool isOnlineActive = true;//true(   ߼   ) or false(   ߼   )
+            bool isOnlineActive = true;//true(在线激活) or false(离线激活)
             try
             {
                 if (isOnlineActive)
                 {
-                    #region   ȡ   ߼         Ϣ
+                    #region   读取在线激活配置信息
                     //string appId = (string)reader.GetValue("APPID", typeof(string));
                     //string sdkKey64 = (string)reader.GetValue("SDKKEY64", typeof(string));
                     //string sdkKey32 = (string)reader.GetValue("SDKKEY32", typeof(string));
                     //string activeKey64 = (string)reader.GetValue("ACTIVEKEY64", typeof(string));
                     //string activeKey32 = (string)reader.GetValue("ACTIVEKEY32", typeof(string));
 
-                    string appId = "";
-                    string sdkKey64 = "";
-                    string sdkKey32 = "";
-                    string activeKey64 = "";
-                    string activeKey32 = "";
+                    string appId = "9GcS3RFUimoNVLWMJFRjRWKKbHfjPS5tfPAXCpZ741ko";
+                    string sdkKey64 = "3Uj8f5DoWiZb79ufJHzXqUQaBfupt4esqWe8B1W53fUN";
+                    string sdkKey32 = "3Uj8f5DoWiZb79ufJHzXqUQaBfupt4esqWe8B1W53fUN";
+                    string activeKey64 = "0869-115U-M1CZ-6H26";
+                    string activeKey32 = "0869-115U-M1CZ-6H26";
 
                     webCamDisplayText.text += "111111";
 
-                    // ж CPUλ  
+                    //判断CPU位数
                     var is64CPU = Environment.Is64BitProcess;
                     if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(is64CPU ? sdkKey64 : sdkKey32) || string.IsNullOrWhiteSpace(is64CPU ? activeKey64 : activeKey32))
                     {
-                        Debug.LogError(string.Format("    App.config     ļ         APP_ID  SDKKEY{0}  ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
-                        //MessageBox.Show(string.Format("    App.config     ļ         APP_ID  SDKKEY{0}  ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
+                        Debug.LogError(string.Format("请在App.config配置文件中先配置APP_ID和SDKKEY{0}、ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
+                        //MessageBox.Show(string.Format("请在App.config配置文件中先配置APP_ID和SDKKEY{0}、ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
 
                         //System.Environment.Exit(0);
                         Quit();
                     }
                     #endregion
 
-                    webCamDisplayText.text += "׼      ";
+                    webCamDisplayText.text += "在线激活！";
 
-                    //   ߼               ִ   1.    ȷ ϴӹ      ص sdk   ѷŵ   Ӧ  bin У 2.  ǰѡ   CPUΪx86    x64
+                    //在线激活引擎    如出现错误，1.请先确认从官网下载的sdk库已放到对应的bin中，2.当前选择的CPU为x86或者x64
                     retCode = imageEngine.ASFOnlineActivation(appId, is64CPU ? sdkKey64 : sdkKey32, is64CPU ? activeKey64 : activeKey32);
 
-                    webCamDisplayText.text += "       ";
+                    webCamDisplayText.text += "在线激活完成！";
                 }
                 else
                 {
-                    #region   ȡ   ߼         Ϣ
+                    #region 读取离线激活配置信息
                     string offlineActiveFilePath = (string)reader.GetValue("OfflineActiveFilePath", typeof(string));
                     if (string.IsNullOrWhiteSpace(offlineActiveFilePath) || !File.Exists(offlineActiveFilePath))
                     {
@@ -174,14 +178,14 @@ public class CameraTest : MonoBehaviour
                         retCode = imageEngine.ASFGetActiveDeviceInfo(out deviceInfo);
                         if (retCode != 0)
                         {
-                            Debug.LogError("  ȡ 豸  Ϣʧ ܣ       :" + retCode);
-                            //MessageBox.Show("  ȡ 豸  Ϣʧ ܣ       :" + retCode);
+                            Debug.LogError("获取设备信息失败，错误码:" + retCode);
+                            //MessageBox.Show("获取设备信息失败，错误码:" + retCode);
                         }
                         else
                         {
                             File.WriteAllText("ActiveDeviceInfo.txt", deviceInfo);
-                            Debug.LogError("  ȡ 豸  Ϣ ɹ    ѱ  浽   и Ŀ¼ActiveDeviceInfo.txt ļ      ڹ   ִ     ߼             ɵ       Ȩ ļ ·    App.config     ú           ");
-                            //MessageBox.Show("  ȡ 豸  Ϣ ɹ    ѱ  浽   и Ŀ¼ActiveDeviceInfo.txt ļ      ڹ   ִ     ߼             ɵ       Ȩ ļ ·    App.config     ú           ");
+                            Debug.LogError("获取设备信息成功，已保存到运行根目录ActiveDeviceInfo.txt文件，请在官网执行离线激活操作，将生成的离线授权文件路径在App.config里配置后再重新运行");
+                            //MessageBox.Show("获取设备信息成功，已保存到运行根目录ActiveDeviceInfo.txt文件，请在官网执行离线激活操作，将生成的离线授权文件路径在App.config里配置后再重新运行");
                         }
                         //System.Environment.Exit(0);
                         Quit();
@@ -192,8 +196,8 @@ public class CameraTest : MonoBehaviour
                 }
                 if (retCode != 0 && retCode != 90114)
                 {
-                    Debug.LogError("    SDKʧ  ,      :" + retCode);
-                    //MessageBox.Show("    SDKʧ  ,      :" + retCode);
+                    Debug.LogError("激活SDK失败,错误码:" + retCode);
+                    //MessageBox.Show("激活SDK失败,错误码:" + retCode);
                     //System.Environment.Exit(0);
                     Quit();
                 }
@@ -202,73 +206,73 @@ public class CameraTest : MonoBehaviour
             }
             catch (Exception ex)
             {
-                if (ex.Message.Contains(" ޷      DLL"))
+                if (ex.Message.Contains("无法加载 DLL"))
                 {
-                    Debug.LogError(" 뽫SDK   DLL    bin  Ӧ  x86  x64 µ  ļ     !");
-                    //MessageBox.Show(" 뽫SDK   DLL    bin  Ӧ  x86  x64 µ  ļ     !");
+                    Debug.LogError("请将SDK相关DLL放入bin对应的x86或x64下的文件夹中!");
+                    //MessageBox.Show("请将SDK相关DLL放入bin对应的x86或x64下的文件夹中!");
                 }
                 else
                 {
-                    Debug.LogError("    SDKʧ  ,   ȼ            SDK  ƽ̨   汾 Ƿ   ȷ!");
-                    //MessageBox.Show("    SDKʧ  ,   ȼ            SDK  ƽ̨   汾 Ƿ   ȷ!");
+                    Debug.LogError("激活SDK失败,请先检查依赖环境及SDK的平台、版本是否正确!");
+                    //MessageBox.Show("激活SDK失败,请先检查依赖环境及SDK的平台、版本是否正确!");
                 }
                 //System.Environment.Exit(0);
                 Quit();
             }
 
-            //  ʼ      
+            //初始化引擎
             DetectionMode detectMode = DetectionMode.ASF_DETECT_MODE_IMAGE;
-            //Videoģʽ ¼       ĽǶ     ֵ
+            //Video模式下检测脸部的角度优先值
             ASF_OrientPriority videoDetectFaceOrientPriority = ASF_OrientPriority.ASF_OP_ALL_OUT;
-            //Imageģʽ ¼       ĽǶ     ֵ
+            //Image模式下检测脸部的角度优先值
             ASF_OrientPriority imageDetectFaceOrientPriority = ASF_OrientPriority.ASF_OP_ALL_OUT;
-            //     Ҫ            
+            //最大需要检测的人脸个数
             int detectFaceMaxNum = 6;
-            //     ʼ  ʱ  Ҫ  ʼ   ļ ⹦     
+            //引擎初始化时需要初始化的检测功能组合
             int combinedMask = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_AGE | FaceEngineMask.ASF_GENDER | FaceEngineMask.ASF_FACE3DANGLE | FaceEngineMask.ASF_IMAGEQUALITY | FaceEngineMask.ASF_MASKDETECT;
-            //  ʼ     棬    ֵΪ0          ֵ  ο http://ai.arcsoft.com.cn/bbs/forum.php?mod=viewthread&tid=19&_dsign=dbad527e
+            //初始化引擎，正常值为0，其他返回值请参考http://ai.arcsoft.com.cn/bbs/forum.php?mod=viewthread&tid=19&_dsign=dbad527e
             retCode = imageEngine.ASFInitEngine(detectMode, imageDetectFaceOrientPriority, detectFaceMaxNum, combinedMask);
             Console.WriteLine("InitEngine Result:" + retCode);
-            AppendText((retCode == 0) ? "ͼƬ     ʼ   ɹ !" : string.Format("ͼƬ     ʼ  ʧ  !      Ϊ:{0}", retCode));
+            AppendText((retCode == 0) ? "图片引擎初始化成功!" : string.Format("图片引擎初始化失败!错误码为:{0}", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
 
-            //  ʼ    Ƶģʽ             
+            //初始化视频模式下人脸检测引擎     
             DetectionMode detectModeVideo = DetectionMode.ASF_DETECT_MODE_VIDEO;
             int combinedMaskVideo = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_FACELANDMARK;
             retCode = videoEngine.ASFInitEngine(detectModeVideo, videoDetectFaceOrientPriority, detectFaceMaxNum, combinedMaskVideo);
-            AppendText((retCode == 0) ? "  Ƶ     ʼ   ɹ !" : string.Format("  Ƶ     ʼ  ʧ  !      Ϊ:{0}", retCode));
+            AppendText((retCode == 0) ? "视频引擎初始化成功!" : string.Format("视频引擎初始化失败!错误码为:{0}", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
 
-            //RGB  Ƶר  FR    
+            //RGB视频专用FR引擎
             combinedMask = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_LIVENESS | FaceEngineMask.ASF_MASKDETECT;
             retCode = videoRGBImageEngine.ASFInitEngine(detectMode, videoDetectFaceOrientPriority, detectFaceMaxNum, combinedMask);
-            AppendText((retCode == 0) ? "RGB         ʼ   ɹ !" : string.Format("RGB         ʼ  ʧ  !      Ϊ:{0}", retCode));
+            AppendText((retCode == 0) ? "RGB处理引擎初始化成功!" : string.Format("RGB处理引擎初始化失败!错误码为:{0}", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
-            //   û     ֵ
+            //设置活体阈值
             videoRGBImageEngine.ASFSetLivenessParam(thresholdRgb);
 
-            //IR  Ƶר  FR    
+            //IR视频专用FR引擎
             combinedMask = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_IR_LIVENESS;
             retCode = videoIRImageEngine.ASFInitEngine(detectModeVideo, videoDetectFaceOrientPriority, detectFaceMaxNum, combinedMask);
-            AppendText((retCode == 0) ? "IR         ʼ   ɹ !\r\n" : string.Format("IR         ʼ  ʧ  !      Ϊ:{0}\r\n", retCode));
+            AppendText((retCode == 0) ? "IR处理引擎初始化成功!\r\n" : string.Format("IR处理引擎初始化失败!错误码为:{0}\r\n", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
-            //   û     ֵ
+            //设置活体阈值
             videoIRImageEngine.ASFSetLivenessParam(thresholdRgb, thresholdIr);
 
             initVideo();
@@ -276,8 +280,8 @@ public class CameraTest : MonoBehaviour
         catch (Exception ex)
         {
             LogUtil.LogInfo(GetType(), ex);
-            Debug.LogError("     ʼ   쳣,    App.config   ޸   ־    ,      ־    ԭ  !");
-            //MessageBox.Show("     ʼ   쳣,    App.config   ޸   ־    ,      ־    ԭ  !");
+            Debug.LogError("程序初始化异常,请在App.config中修改日志配置,根据日志查找原因!");
+            //MessageBox.Show("程序初始化异常,请在App.config中修改日志配置,根据日志查找原因!");
 
             Quit();
             //System.Environment.Exit(0);
@@ -295,230 +299,230 @@ public class CameraTest : MonoBehaviour
 
     #region         
     /// <summary>
-    /// ͼ           
+    /// 图像处理引擎对象
     /// </summary>
     private FaceEngine imageEngine = new FaceEngine();
 
     /// <summary>
-    ///      Ҳ ͼƬ·  
+    /// 保存右侧图片路径
     /// </summary>
     private string image1Path;
 
     /// <summary>
-    /// ͼƬ    С    
+    /// 图片最大大小限制
     /// </summary>
     private long maxSize = 1024 * 1024 * 2;
 
     /// <summary>
-    ///      
+    /// 最大宽度
     /// </summary>
     private int maxWidth = 1536;
 
     /// <summary>
-    ///    ߶ 
+    /// 最大高度
     /// </summary>
     private int maxHeight = 1536;
 
     /// <summary>
-    ///  ȶ     ͼƬ        
+    /// 比对人脸图片人脸特征
     /// </summary>
     private List<FaceFeature> rightImageFeatureList = new List<FaceFeature>();
 
     /// <summary>
-    ///     Ա ͼƬ   б 
+    /// 保存对比图片的列表
     /// </summary>
     private List<string> imagePathList = new List<string>();
 
     /// <summary>
-    ///                б 
+    /// 人脸库人脸特征列表
     /// </summary>
     private List<FaceFeature> leftImageFeatureList = new List<FaceFeature>();
 
     /// <summary>
-    ///      ȶ   ֵ
+    /// 人脸比对阈值
     /// </summary>
     private float threshold = 0.8f;
 
     /// <summary>
-    ///    ⣨IR        ֵ
+    /// 红外（IR）活体阈值
     /// </summary>
     private float thresholdIr = 0.7f;
 
     /// <summary>
-    ///  ɼ  ⣨RGB        ֵ
+    /// 可见光（RGB）活体阈值
     /// </summary>
     private float thresholdRgb = 0.5f;
 
     /// <summary>
-    /// ͼ      ע    ֵ
+    /// 图像质量注册阈值
     /// </summary>
     private float thresholdImgRegister = 0.63f;
 
     /// <summary>
-    /// ͼ      ʶ         ֵ
+    /// 图像质量识别戴口罩阈值
     /// </summary>
     private float thresholdImgMask = 0.29f;
 
     /// <summary>
-    /// ͼ      ʶ  δ        ֵ
+    /// 图像质量识别未戴口罩阈值
     /// </summary>
     private float thresholdImgNoMask = 0.49f;
     /// <summary>
-    ///  ȶ ģ  
+    /// 比对模型
     /// </summary>
     private ASF_CompareModel compareModel = ASF_CompareModel.ASF_ID_PHOTO;
     /// <summary>
-    ///    ڱ   Ƿ   Ҫ    ȶԽ  
+    /// 用于标记是否需要清除比对结果
     /// </summary>
     private bool isCompare = false;
 
-    #region   Ƶģʽ     
+    #region 视频模式下相关
     /// <summary>
-    ///   Ƶ       
+    /// 视频引擎对象
     /// </summary>
     private FaceEngine videoEngine = new FaceEngine();
 
     /// <summary>
-    /// RGB  Ƶ       
+    /// RGB视频引擎对象
     /// </summary>
     private FaceEngine videoRGBImageEngine = new FaceEngine();
 
     /// <summary>
-    /// IR  Ƶ       
+    /// IR视频引擎对象
     /// </summary>
     private FaceEngine videoIRImageEngine = new FaceEngine();
 
     /// <summary>
-    ///   Ƶ     豸  Ϣ
+    /// 视频输入设备信息
     /// </summary>
     private FilterInfoCollection filterInfoCollection;
 
     /// <summary>
-    /// RGB    ͷ 豸
+    /// RGB摄像头设备
     /// </summary>
     private VideoCaptureDevice rgbDeviceVideo;
 
     /// <summary>
-    /// IR    ͷ 豸
+    /// IR摄像头设备
     /// </summary>
     private VideoCaptureDevice irDeviceVideo;
 
     /// <summary>
-    ///  Ƿ   ˫Ŀ    
+    /// 是否是双目摄像
     /// </summary>
     private bool isDoubleShot = false;
 
     /// <summary>
-    /// RGB     ͷ    
+    /// RGB 摄像头索引
     /// </summary>
     private int rgbCameraIndex = 0;
 
     /// <summary>
-    /// IR     ͷ    
+    /// IR 摄像头索引
     /// </summary>
     private int irCameraIndex = 0;
 
     /// <summary>
-    ///   Ա  ͼƬѡ         
+    /// 人员库图片选择 锁对象
     /// </summary>
     private object chooseImgLocker = new object();
 
     /// <summary>
-    /// RGB  Ƶ֡ͼ  ʹ    
+    /// RGB视频帧图像使用锁
     /// </summary>
     private object rgbVideoImageLocker = new object();
     /// <summary>
-    /// IR  Ƶ֡ͼ  ʹ    
+    /// IR视频帧图像使用锁
     /// </summary>
     private object irVideoImageLocker = new object();
     /// <summary>
-    /// RGB  Ƶ֡ͼ  
+    /// RGB视频帧图像
     /// </summary>
     private Bitmap rgbVideoBitmap = null;
     /// <summary>
-    /// IR  Ƶ֡ͼ  
+    /// IR 视频帧图像
     /// </summary>
     private Bitmap irVideoBitmap = null;
     /// <summary>
-    /// RGB     ͷ  Ƶ    ׷ ټ    
+    /// RGB 摄像头视频人脸追踪检测结果
     /// </summary>
     private DictionaryUnit<int, FaceTrackUnit> trackRGBUnitDict = new DictionaryUnit<int, FaceTrackUnit>();
 
     /// <summary>
-    /// RGB            Դ    ֵ 
+    /// RGB 特征搜索尝试次数字典
     /// </summary>
     private DictionaryUnit<int, int> rgbFeatureTryDict = new DictionaryUnit<int, int>();
 
     /// <summary>
-    /// RGB      Ⳣ Դ    ֵ 
+    /// RGB 活体检测尝试次数字典
     /// </summary>
     private DictionaryUnit<int, int> rgbLivenessTryDict = new DictionaryUnit<int, int>();
 
     /// <summary>
-    /// IR   Ƶ       ׷ ټ    
+    /// IR 视频最大人脸追踪检测结果
     /// </summary>
     private FaceTrackUnit trackIRUnit = new FaceTrackUnit();
 
     /// <summary>
-    /// VideoPlayer        
+    /// VideoPlayer 框的字体
     /// </summary>
     private Font font = new Font(FontFamily.GenericSerif, 10f, FontStyle.Bold);
 
     /// <summary>
-    ///   ɫ    
+    /// 红色画笔
     /// </summary>
     private SolidBrush redBrush = new SolidBrush(Color.Red);
 
     /// <summary>
-    ///   ɫ    
+    /// 绿色画笔
     /// </summary>
     private SolidBrush greenBrush = new SolidBrush(Color.Green);
 
     /// <summary>
-    ///  ر FR ߳̿   
+    /// 关闭FR线程开关
     /// </summary>
     private bool exitVideoRGBFR = false;
 
     /// <summary>
-    ///  رջ    ߳̿   
+    /// 关闭活体线程开关
     /// </summary>
     private bool exitVideoRGBLiveness = false;
     /// <summary>
-    ///  ر IR     FR ߳  ߳̿   
+    /// 关闭IR活体和FR线程线程开关
     /// </summary>
     private bool exitVideoIRFRLiveness = false;
     /// <summary>
-    /// FRʧ     Դ   
+    /// FR失败重试次数
     /// </summary>
     private int frMatchTime = 30;
 
     /// <summary>
-    ///       ʧ     Դ   
+    /// 活体检测失败重试次数
     /// </summary>
     private int liveMatchTime = 30;
     #endregion
     #endregion
 
-    #region   ʼ  
+    #region 初始化
     public void FaceForm()
     {
         //InitializeComponent();
         //CheckForIllegalCrossThreadCalls = false;
-        //  ʼ      
+        //初始化引擎
         InitEngines();
-        //        ͷͼ 񴰿 
+        //隐藏摄像头图像窗口
         //rgbVideoSource.Hide();
         //irVideoSource.Hide();
     }
 
     /// <summary>
-    ///   ʼ      
+    /// 初始化引擎
     /// </summary>
     private void InitEngines()
     {
         try
         {
-            //  ȡ     ļ 
+            //读取配置文件
             AppSettingsReader reader = new AppSettingsReader();
             rgbCameraIndex = (int)reader.GetValue("RGB_CAMERA_INDEX", typeof(int));
             irCameraIndex = (int)reader.GetValue("IR_CAMERA_INDEX", typeof(int));
@@ -526,32 +530,32 @@ public class CameraTest : MonoBehaviour
             liveMatchTime = (int)reader.GetValue("LIVENESS_MATCH_TIME", typeof(int));
 
             int retCode = 0;
-            bool isOnlineActive = true;//true(   ߼   ) or false(   ߼   )
+            bool isOnlineActive = true;//true(在线激活) or false(离线激活)
             try
             {
                 if (isOnlineActive)
                 {
-                    #region   ȡ   ߼         Ϣ
+                    #region 读取在线激活配置信息
                     string appId = (string)reader.GetValue("APPID", typeof(string));
                     string sdkKey64 = (string)reader.GetValue("SDKKEY64", typeof(string));
                     string sdkKey32 = (string)reader.GetValue("SDKKEY32", typeof(string));
                     string activeKey64 = (string)reader.GetValue("ACTIVEKEY64", typeof(string));
                     string activeKey32 = (string)reader.GetValue("ACTIVEKEY32", typeof(string));
-                    // ж CPUλ  
+                    //判断CPU位数
                     var is64CPU = Environment.Is64BitProcess;
                     if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(is64CPU ? sdkKey64 : sdkKey32) || string.IsNullOrWhiteSpace(is64CPU ? activeKey64 : activeKey32))
                     {
-                        //MessageBox.Show(string.Format("    App.config     ļ         APP_ID  SDKKEY{0}  ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
-                        Debug.LogError(string.Format("    App.config     ļ         APP_ID  SDKKEY{0}  ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
+                        //MessageBox.Show(string.Format("请在App.config配置文件中先配置APP_ID和SDKKEY{0}、ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
+                        Debug.LogError(string.Format("请在App.config配置文件中先配置APP_ID和SDKKEY{0}、ACTIVEKEY{0}!", is64CPU ? "64" : "32"));
                         System.Environment.Exit(0);
                     }
                     #endregion
-                    //   ߼               ִ   1.    ȷ ϴӹ      ص sdk   ѷŵ   Ӧ  bin У 2.  ǰѡ   CPUΪx86    x64
+                    //在线激活引擎    如出现错误，1.请先确认从官网下载的sdk库已放到对应的bin中，2.当前选择的CPU为x86或者x64
                     retCode = imageEngine.ASFOnlineActivation(appId, is64CPU ? sdkKey64 : sdkKey32, is64CPU ? activeKey64 : activeKey32);
                 }
                 else
                 {
-                    #region   ȡ   ߼         Ϣ
+                    #region 读取离线激活配置信息
                     string offlineActiveFilePath = (string)reader.GetValue("OfflineActiveFilePath", typeof(string));
                     if (string.IsNullOrWhiteSpace(offlineActiveFilePath) || !File.Exists(offlineActiveFilePath))
                     {
@@ -559,96 +563,96 @@ public class CameraTest : MonoBehaviour
                         retCode = imageEngine.ASFGetActiveDeviceInfo(out deviceInfo);
                         if (retCode != 0)
                         {
-                            //MessageBox.Show("  ȡ 豸  Ϣʧ ܣ       :" + retCode);
-                            Debug.LogError("  ȡ 豸  Ϣʧ ܣ       :" + retCode);
+                            //MessageBox.Show("获取设备信息失败，错误码:" + retCode);
+                            Debug.LogError("获取设备信息失败，错误码:" + retCode);
                         }
                         else
                         {
                             File.WriteAllText("ActiveDeviceInfo.txt", deviceInfo);
-                            //MessageBox.Show("  ȡ 豸  Ϣ ɹ    ѱ  浽   и Ŀ¼ActiveDeviceInfo.txt ļ      ڹ   ִ     ߼             ɵ       Ȩ ļ ·    App.config     ú           ");
-                            Debug.LogError("  ȡ 豸  Ϣ ɹ    ѱ  浽   и Ŀ¼ActiveDeviceInfo.txt ļ      ڹ   ִ     ߼             ɵ       Ȩ ļ ·    App.config     ú           ");
+                            //MessageBox.Show("获取设备信息成功，已保存到运行根目录ActiveDeviceInfo.txt文件，请在官网执行离线激活操作，将生成的离线授权文件路径在App.config里配置后再重新运行");
+                            Debug.LogError("获取设备信息成功，已保存到运行根目录ActiveDeviceInfo.txt文件，请在官网执行离线激活操作，将生成的离线授权文件路径在App.config里配置后再重新运行");
                         }
                         System.Environment.Exit(0);
                     }
                     #endregion
-                    //   ߼   
+                    //离线激活
                     retCode = imageEngine.ASFOfflineActivation(offlineActiveFilePath);
                 }
                 if (retCode != 0 && retCode != 90114)
                 {
-                    //MessageBox.Show("    SDKʧ  ,      :" + retCode);
-                    Debug.LogError("    SDKʧ  ,      :" + retCode);
+                    //MessageBox.Show("激活SDK失败,错误码:" + retCode);
+                    Debug.LogError("激活SDK失败,错误码:" + retCode);
                     System.Environment.Exit(0);
                 }
             }
             catch (Exception ex)
             {
-                if (ex.Message.Contains(" ޷      DLL"))
+                if (ex.Message.Contains("无法加载 DLL"))
                 {
-                    //MessageBox.Show(" 뽫SDK   DLL    bin  Ӧ  x86  x64 µ  ļ     !");
-                    Debug.LogError(" 뽫SDK   DLL    bin  Ӧ  x86  x64 µ  ļ     !");
+                    //MessageBox.Show("请将SDK相关DLL放入bin对应的x86或x64下的文件夹中!");
+                    Debug.LogError("请将SDK相关DLL放入bin对应的x86或x64下的文件夹中!");
                 }
                 else
                 {
-                    //MessageBox.Show("    SDKʧ  ,   ȼ            SDK  ƽ̨   汾 Ƿ   ȷ!");
-                    Debug.LogError("    SDKʧ  ,   ȼ            SDK  ƽ̨   汾 Ƿ   ȷ!");
+                    //MessageBox.Show("激活SDK失败,请先检查依赖环境及SDK的平台、版本是否正确!");
+                    Debug.LogError("激活SDK失败,请先检查依赖环境及SDK的平台、版本是否正确!");
                 }
                 System.Environment.Exit(0);
             }
 
-            //  ʼ      
+            //初始化引擎
             DetectionMode detectMode = DetectionMode.ASF_DETECT_MODE_IMAGE;
-            //Videoģʽ ¼       ĽǶ     ֵ
+            //Video模式下检测脸部的角度优先值
             ASF_OrientPriority videoDetectFaceOrientPriority = ASF_OrientPriority.ASF_OP_ALL_OUT;
-            //Imageģʽ ¼       ĽǶ     ֵ
+            //Image模式下检测脸部的角度优先值
             ASF_OrientPriority imageDetectFaceOrientPriority = ASF_OrientPriority.ASF_OP_ALL_OUT;
-            //     Ҫ            
+            //最大需要检测的人脸个数
             int detectFaceMaxNum = 6;
-            //     ʼ  ʱ  Ҫ  ʼ   ļ ⹦     
+            //引擎初始化时需要初始化的检测功能组合
             int combinedMask = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_AGE | FaceEngineMask.ASF_GENDER | FaceEngineMask.ASF_FACE3DANGLE | FaceEngineMask.ASF_IMAGEQUALITY | FaceEngineMask.ASF_MASKDETECT;
-            //  ʼ     棬    ֵΪ0          ֵ  ο http://ai.arcsoft.com.cn/bbs/forum.php?mod=viewthread&tid=19&_dsign=dbad527e
+            //初始化引擎，正常值为0，其他返回值请参考http://ai.arcsoft.com.cn/bbs/forum.php?mod=viewthread&tid=19&_dsign=dbad527e
             retCode = imageEngine.ASFInitEngine(detectMode, imageDetectFaceOrientPriority, detectFaceMaxNum, combinedMask);
             Console.WriteLine("InitEngine Result:" + retCode);
-            AppendText((retCode == 0) ? "ͼƬ     ʼ   ɹ !" : string.Format("ͼƬ     ʼ  ʧ  !      Ϊ:{0}", retCode));
+            AppendText((retCode == 0) ? "图片引擎初始化成功!" : string.Format("图片引擎初始化失败!错误码为:{0}", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
 
-            //  ʼ    Ƶģʽ             
+            //初始化视频模式下人脸检测引擎
             DetectionMode detectModeVideo = DetectionMode.ASF_DETECT_MODE_VIDEO;
             int combinedMaskVideo = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_FACELANDMARK;
             retCode = videoEngine.ASFInitEngine(detectModeVideo, videoDetectFaceOrientPriority, detectFaceMaxNum, combinedMaskVideo);
-            AppendText((retCode == 0) ? "  Ƶ     ʼ   ɹ !" : string.Format("  Ƶ     ʼ  ʧ  !      Ϊ:{0}", retCode));
+            AppendText((retCode == 0) ? "视频引擎初始化成功!" : string.Format("视频引擎初始化失败!错误码为:{0}", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
 
-            //RGB  Ƶר  FR    
+            //RGB视频专用FR引擎
             combinedMask = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_LIVENESS | FaceEngineMask.ASF_MASKDETECT;
             retCode = videoRGBImageEngine.ASFInitEngine(detectMode, videoDetectFaceOrientPriority, detectFaceMaxNum, combinedMask);
-            AppendText((retCode == 0) ? "RGB         ʼ   ɹ !" : string.Format("RGB         ʼ  ʧ  !      Ϊ:{0}", retCode));
+            AppendText((retCode == 0) ? "RGB处理引擎初始化成功!" : string.Format("RGB处理引擎初始化失败!错误码为:{0}", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
-            //   û     ֵ
+            //设置活体阈值
             videoRGBImageEngine.ASFSetLivenessParam(thresholdRgb);
 
-            //IR  Ƶר  FR    
+            //IR视频专用FR引擎
             combinedMask = FaceEngineMask.ASF_FACE_DETECT | FaceEngineMask.ASF_FACERECOGNITION | FaceEngineMask.ASF_IR_LIVENESS;
             retCode = videoIRImageEngine.ASFInitEngine(detectModeVideo, videoDetectFaceOrientPriority, detectFaceMaxNum, combinedMask);
             AppendText((retCode == 0) ? "IR         ʼ   ɹ !\r\n" : string.Format("IR         ʼ  ʧ  !      Ϊ:{0}\r\n", retCode));
             if (retCode != 0)
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
             }
-            //   û     ֵ
+            //设置活体阈值
             videoIRImageEngine.ASFSetLivenessParam(thresholdRgb, thresholdIr);
 
             initVideo();
@@ -656,21 +660,21 @@ public class CameraTest : MonoBehaviour
         catch (Exception ex)
         {
             LogUtil.LogInfo(GetType(), ex);
-            //MessageBox.Show("     ʼ   쳣,    App.config   ޸   ־    ,      ־    ԭ  !");
-            Debug.LogError("     ʼ   쳣,    App.config   ޸   ־    ,      ־    ԭ  !");
+            //MessageBox.Show("程序初始化异常,请在App.config中修改日志配置,根据日志查找原因!");
+            Debug.LogError("程序初始化异常,请在App.config中修改日志配置,根据日志查找原因!");
             System.Environment.Exit(0);
         }
     }
 
     /// <summary>
-    ///     ͷ  ʼ  
+    /// 摄像头初始化
     /// </summary>
     private void initVideo()
     {
         try
         {
             //filterInfoCollection = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-            //   û п       ͷ            ͷ    ť   ã     ʹ    
+            //如果没有可用摄像头，“启用摄像头”按钮禁用，否则使可用
             btnStartVideo.enabled = WebCamTexture.devices.Length != 0;
         }
         catch (Exception ex)
@@ -680,9 +684,9 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region ע        ť ¼         
+    #region 注册人脸按钮事件        
     /// <summary>
-    ///       ͼƬѡ  ť ¼ 
+    /// 人脸库图片选择按钮事件
     /// </summary>
     private void ChooseMultiImg(object sender, EventArgs e)
     {
@@ -691,54 +695,56 @@ public class CameraTest : MonoBehaviour
             lock (chooseImgLocker)
             {
                 //OpenFileDialog openFileDialog = new OpenFileDialog();
-                //openFileDialog.Title = "ѡ  ͼƬ";
-                //openFileDialog.Filter = "ͼƬ ļ |*.bmp;*.jpg;*.jpeg;*.png";
+                //openFileDialog.Title = "选择图片";
+                //openFileDialog.Filter = "图片文件|*.bmp;*.jpg;*.jpeg;*.png";
                 //openFileDialog.Multiselect = true;
                 //openFileDialog.FileName = string.Empty;
                 //imageList.Refresh();
                 //if (!openFileDialog.ShowDialog().Equals(DialogResult.OK))
                 {
-                    return;
+                    //return;
                 }
                 List<string> imagePathListTemp = new List<string>();
+                imagePathListTemp.Add("test.png");
+
                 var numStart = imagePathList.Count;
                 //int isGoodImage = 0;
 
-                //        Լ   ȡ        
+                //人脸检测以及提取人脸特征
                 ThreadPool.QueueUserWorkItem(new WaitCallback(delegate
                 {
-                    //  ֹ     ť
+                    //禁止点击按钮
                     //Invoke(new Action(delegate
                     //{
                     //    ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn, btnStartVideo);
                     //}));
 
-                    //    ͼƬ·      ʾ
+                    //保存图片路径并显示
                     //string[] fileNames = openFileDialog.FileNames;
                     //for (int i = 0; i < fileNames.Length; i++)
                     //{
-                    //    //ͼƬ  ʽ ж 
+                    //    //图片格式判断
                     //    if (CheckImage(fileNames[i]))
                     //    {
                     //        imagePathListTemp.Add(fileNames[i]);
                     //    }
                     //}
-                    //       ͼ  
+                    //人脸检测和剪裁
                     for (int i = 0; i < imagePathListTemp.Count; i++)
                     {
                         Image image = ImageUtil.ReadFromFile(imagePathListTemp[i]);
-                        //У  ͼƬ   
+                        //校验图片宽高
                         CheckImageWidthAndHeight(ref image);
                         if (image == null)
                         {
                             continue;
                         }
-                        //    ͼ   ȣ   Ҫ   Ϊ4 ı   
+                        //调整图像宽度，需要宽度为4的倍数
                         if (image.Width % 4 != 0)
                         {
                             image = ImageUtil.ScaleImage(image, image.Width - (image.Width % 4), image.Height);
                         }
-                        //  ȡ     ж 
+                        //提取特征判断
                         string featureResult = string.Empty;
                         bool isMask;
                         int retCode;
@@ -756,13 +762,13 @@ public class CameraTest : MonoBehaviour
                             }
                             continue;
                         }
-                        //       
+                        //人脸检测
                         MultiFaceInfo multiFaceInfo;
                         retCode = imageEngine.ASFDetectFacesEx(image, out multiFaceInfo);
-                        // жϼ    
+                        //判断检测结果
                         if (retCode == 0 && multiFaceInfo.faceNum > 0)
                         {
-                            //      ʱ  Ĭ ϲü  һ      
+                            //多人脸时，默认裁剪第一个人脸
                             imagePathList.Add(imagePathListTemp[i]);
                             MRECT rect = multiFaceInfo.faceRects[0];
                             image = ImageUtil.CutImage(image, rect.left, rect.top, rect.right, rect.bottom);
@@ -771,7 +777,7 @@ public class CameraTest : MonoBehaviour
                         {
                             //this.Invoke(new Action(delegate
                             //{
-                            //    AppendText("δ  ⵽    ");
+                            //    AppendText("未检测到人脸");
                             //}));
                             if (image != null)
                             {
@@ -780,19 +786,19 @@ public class CameraTest : MonoBehaviour
                             continue;
                         }
 
-                        //  ʾ    
+                        //显示人脸
                         //this.Invoke(new Action(delegate
                         //{
                         //    if (image == null)
                         //    {
                         //        image = ImageUtil.ReadFromFile(imagePathListTemp[i]);
-                        //        //У  ͼƬ   
+                        //        //校验图片宽高
                         //        CheckImageWidthAndHeight(ref image);
                         //    }
                         //    //imageLists.Images.Add(imagePathListTemp[i], image);
                         //    //imageList.Items.Add((numStart + isGoodImage) + "  ", imagePathListTemp[i]);
                         //    //imageList.Refresh();
-                        //    AppendText(string.Format("    ȡ{0}          ֵ  [left:{1},right:{2},top:{3},bottom:{4},orient:{5},mask:{6}]", (numStart + isGoodImage), singleFaceInfo.faceRect.left, singleFaceInfo.faceRect.right, singleFaceInfo.faceRect.top, singleFaceInfo.faceRect.bottom, singleFaceInfo.faceOrient, isMask ? "mask" : "no mask"));
+                        //    AppendText(string.Format("已提取{0}号人脸特征值，[left:{1},right:{2},top:{3},bottom:{4},orient:{5},mask:{6}]", (numStart + isGoodImage), singleFaceInfo.faceRect.left, singleFaceInfo.faceRect.right, singleFaceInfo.faceRect.top, singleFaceInfo.faceRect.bottom, singleFaceInfo.faceOrient, isMask ? "mask" : "no mask"));
                         //    leftImageFeatureList.Add(feature);
                         //    isGoodImage++;
                         //    if (image != null)
@@ -801,11 +807,11 @@ public class CameraTest : MonoBehaviour
                         //    }
                         //}));
                     }
-                    //        ť
+                    //允许点击按钮
                     //Invoke(new Action(delegate
                     //{
                     //    //ControlsEnable(true, chooseMultiImgBtn, btnClearFaceList, btnStartVideo);
-                    //    //ControlsEnable(("        ͷ".Equals(btnStartVideo.Text)), chooseImgBtn, matchBtn);
+                    //    //ControlsEnable(("启用摄像头".Equals(btnStartVideo.Text)), chooseImgBtn, matchBtn);
                     //}));
                 }));
 
@@ -818,9 +824,9 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region         ⰴť ¼ 
+    #region 清空人脸库按钮事件
     /// <summary>
-    ///           ¼ 
+    /// 清除人脸库事件
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -828,7 +834,7 @@ public class CameraTest : MonoBehaviour
     {
         try
         {
-            //       
+            //清除数据
             //imageLists.Images.Clear();
             //imageList.Items.Clear();
             leftImageFeatureList.Clear();
@@ -843,73 +849,73 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region ѡ  ʶ  ͼ  ť ¼ 
+    #region 选择识别图按钮事件
     /// <summary>
-    ///   ѡ  ʶ  ͼƬ    ť ¼ 
+    /// “选择识别图片”按钮事件
     /// </summary>
     private void ChooseImg(object sender, EventArgs e)
     {
         try
         {
             //lblCompareInfo.Text = string.Empty;
-            // ж      Ƿ  ʼ   ɹ 
+            //判断引擎是否初始化成功
             if (!imageEngine.GetEngineStatus())
             {
-                //      ع  ܰ ť
+                //禁用相关功能按钮
                 //ControlsEnable(false, chooseMultiImgBtn, matchBtn, btnClearFaceList, chooseImgBtn);
-                //MessageBox.Show("   ȳ ʼ      !");
-                Debug.LogError("   ȳ ʼ      !");
+                //MessageBox.Show("请先初始化引擎!");
+                Debug.LogError("请先初始化引擎!");
                 return;
             }
-            //ѡ  ͼƬ
+            //选择图片
             //OpenFileDialog openFileDialog = new OpenFileDialog();
-            //openFileDialog.Title = "ѡ  ͼƬ";
-            //openFileDialog.Filter = "ͼƬ ļ |*.bmp;*.jpg;*.jpeg;*.png";
+            //openFileDialog.Title = "选择图片";
+            //openFileDialog.Filter = "图片文件|*.bmp;*.jpg;*.jpeg;*.png";
             //openFileDialog.Multiselect = false;
             //openFileDialog.FileName = string.Empty;
             //if (openFileDialog.ShowDialog().Equals(DialogResult.OK))
             {
                 //image1Path = openFileDialog.FileName;
-                //   ͼƬ  ʽ
+                //检测图片格式
                 //if (!CheckImage(image1Path))
                 {
                     return;
                 }
                 DateTime detectStartTime = DateTime.Now;
-                AppendText(string.Format("--------------  ʼ  ⣬ʱ  :{0}--------------", detectStartTime.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+                AppendText(string.Format("--------------开始检测，时间:{0}--------------", detectStartTime.ToString("yyyy-MM-dd HH:mm:ss:ms")));
 
-                //  ȡ ļ    ܾ      ͼƬ
+                //获取文件，拒绝过大的图片
                 FileInfo fileInfo = new FileInfo(image1Path);
                 if (fileInfo.Length > maxSize)
                 {
-                    //MessageBox.Show("ͼ   ļ    Ϊ2MB    ѹ     ٵ   !");
-                    AppendText(string.Format("--------------        ʱ  :{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+                    //MessageBox.Show("图像文件最大为2MB，请压缩后再导入!");
+                    AppendText(string.Format("--------------检测结束，时间:{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
                     AppendText("");
                     return;
                 }
 
                 Image srcImage = ImageUtil.ReadFromFile(image1Path);
-                //У  ͼƬ   
+                //校验图片宽高
                 CheckImageWidthAndHeight(ref srcImage);
                 if (srcImage == null)
                 {
-                    //MessageBox.Show("ͼ     ݻ ȡʧ ܣ    Ժ     !");
-                    AppendText(string.Format("--------------        ʱ  :{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+                    //MessageBox.Show("图像数据获取失败，请稍后重试!");
+                    AppendText(string.Format("--------------检测结束，时间:{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
                     AppendText("");
                     return;
                 }
-                //    ͼ   ȣ   Ҫ   Ϊ4 ı   
+                //调整图像宽度，需要宽度为4的倍数
                 if (srcImage.Width % 4 != 0)
                 {
                     srcImage = ImageUtil.ScaleImage(srcImage, srcImage.Width - (srcImage.Width % 4), srcImage.Height);
                 }
-                //       
+                //人脸检测
                 MultiFaceInfo multiFaceInfo;
                 int retCode = imageEngine.ASFDetectFacesEx(srcImage, out multiFaceInfo);
                 if (retCode != 0)
                 {
-                    //MessageBox.Show("ͼ         ʧ ܣ    Ժ     !");
-                    AppendText(string.Format("--------------        ʱ  :{0}--------------\r\n", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+                    //MessageBox.Show("图像人脸检测失败，请稍后重试!");
+                    AppendText(string.Format("--------------检测结束，时间:{0}--------------\r\n", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
                     AppendText("");
                     return;
                 }
@@ -918,8 +924,8 @@ public class CameraTest : MonoBehaviour
                 {
                     //srcImage = ImageUtil.ScaleImage(srcImage, picImageCompare.Width, picImageCompare.Height);
                     //picImageCompare.Image = srcImage;
-                    AppendText(string.Format("{0} - δ        !\r\n", DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")));
-                    AppendText(string.Format("--------------        ʱ  :{0}--------------\r\n", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+                    AppendText(string.Format("{0} - 未检测出人脸!\r\n", DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")));
+                    AppendText(string.Format("--------------检测结束，时间:{0}--------------\r\n", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
                     AppendText("");
                     return;
                 }
@@ -934,7 +940,7 @@ public class CameraTest : MonoBehaviour
                 int retCode_3DAngle = -1;
                 Face3DAngle face3DAngleInfo = FaceUtil.Face3DAngleDetection(imageEngine, srcImage, multiFaceInfo, out retCode_3DAngle);
 
-                AppendText(string.Format("{0} -         :{1}", DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"), multiFaceInfo.faceNum));
+                AppendText(string.Format("{0} - 人脸数量:{1}", DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"), multiFaceInfo.faceNum));
 
                 MRECT[] mrectTemp = new MRECT[multiFaceInfo.faceNum];
                 int[] ageTemp = new int[multiFaceInfo.faceNum];
@@ -942,7 +948,7 @@ public class CameraTest : MonoBehaviour
                 bool[] maskTemp = new bool[multiFaceInfo.faceNum];
                 SingleFaceInfo singleFaceInfo;
 
-                //  ǳ   ⵽      
+                //标记出检测到的人脸
                 for (int i = 0; i < multiFaceInfo.faceNum; i++)
                 {
                     MRECT rect = multiFaceInfo.faceRects[i];
@@ -951,7 +957,7 @@ public class CameraTest : MonoBehaviour
                     //      
                     if (retCode_Age != 0)
                     {
-                        AppendText(string.Format("      ʧ ܣ     {0}!", retCode_Age));
+                        AppendText(string.Format("年龄检测失败，返回{0}!", retCode_Age));
                     }
                     else
                     {
@@ -961,7 +967,7 @@ public class CameraTest : MonoBehaviour
                     int gender = -1;
                     if (retCode_Gender != 0)
                     {
-                        AppendText(string.Format(" Ա   ʧ ܣ     {0}!", retCode_Gender));
+                        AppendText(string.Format("性别检测失败，返回{0}!", retCode_Gender));
                     }
                     else
                     {
@@ -973,16 +979,16 @@ public class CameraTest : MonoBehaviour
                     float yaw = 0f;
                     if (retCode_3DAngle != 0)
                     {
-                        AppendText(string.Format("3DAngle   ʧ ܣ     {0}!", retCode_3DAngle));
+                        AppendText(string.Format("3DAngle检测失败，返回{0}!", retCode_3DAngle));
                     }
                     else
                     {
-                        //rollΪ    ǣ pitchΪ     ǣ yawΪƫ    
+                        //roll口罩检测和提取人脸特征，pitch为俯仰角，yaw为偏航角
                         roll = face3DAngleInfo.roll[i];
                         pitch = face3DAngleInfo.pitch[i];
                         yaw = face3DAngleInfo.yaw[i];
                     }
-                    //   ּ     ȡ        
+                    // 口罩检测和提取人脸特征
                     bool isMask;
                     string faceFeatureStr = string.Empty;
                     FaceFeature tempFaceFeature = FaceUtil.ExtractFeature(imageEngine, srcImage, thresholdImgNoMask, thresholdImgMask, ASF_RegisterOrNot.ASF_RECOGNITION, out singleFaceInfo, out isMask, ref faceFeatureStr, out retCode, i);
@@ -998,26 +1004,26 @@ public class CameraTest : MonoBehaviour
                     mrectTemp[i] = rect;
                     ageTemp[i] = age;
                     genderTemp[i] = gender;
-                    AppendText(string.Format("{0} -   {1}        :[left:{2},top:{3},right:{4},bottom:{5},\r\norient:{6},roll:{7},pitch:{8},yaw:{9},wearGlasses:{10},\r\nleftEyeClosed:{11},rightEyeClosed:{12},faceShelter:{13}],Age:{14},Gender:{15},Mask:{16}\r\n--------------------------------------------------------",
+                    AppendText(string.Format("{0} -第{1} 人脸坐标:[left:{2},top:{3},right:{4},bottom:{5},\r\norient:{6},roll:{7},pitch:{8},yaw:{9},wearGlasses:{10},\r\nleftEyeClosed:{11},rightEyeClosed:{12},faceShelter:{13}],Age:{14},Gender:{15},Mask:{16}\r\n--------------------------------------------------------",
                         DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"), i, rect.left, rect.top, rect.right, rect.bottom, orient, roll, pitch, yaw, multiFaceInfo.wearGlasses[i].ToString("f2"), multiFaceInfo.leftEyeClosed[i], multiFaceInfo.rightEyeClosed[i],
                         multiFaceInfo.faceShelter[i], age, (gender >= 0 ? gender.ToString() : ""), (isMask ? "mask" : "no mask")));
                 }
-                AppendText(string.Format("--------------        ʱ  :{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+                AppendText(string.Format("--------------检测结束，时间:{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
                 AppendText("");
 
-                //    ϴε ƥ    
+                //清空上次的匹配结果
                 for (int i = 0; i < leftImageFeatureList.Count; i++)
                 {
                     //imageList.Items[i].Text = string.Format("{0}  ", i);
                 }
-                //  ȡ   ű   
+                //获取缩放比例
                 //float scaleRate = ImageUtil.GetWidthAndHeight(srcImage.Width, srcImage.Height, picImageCompare.Width, picImageCompare.Height);
-                //    ͼƬ
+                //缩放图片
                 //srcImage = ImageUtil.ScaleImage(srcImage, picImageCompare.Width, picImageCompare.Height);
-                //  ӱ  
+                //添加标记
                 //srcImage = ImageUtil.MarkRectAndString(srcImage, mrectTemp, ageTemp, genderTemp, maskTemp, picImageCompare.Width, scaleRate, multiFaceInfo.faceNum);
 
-                //  ʾ  Ǻ  ͼ  
+                //显示标记后的图像
                 //picImageCompare.Image = srcImage;
             }
         }
@@ -1028,9 +1034,9 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region   ʼƥ 䰴ť ¼ 
+    #region 开始匹配按钮事件
     /// <summary>
-    /// ƥ   ¼ 
+    /// 匹配事件
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -1040,8 +1046,8 @@ public class CameraTest : MonoBehaviour
         {
             if (leftImageFeatureList.Count == 0)
             {
-                //MessageBox.Show("  ע      !", "  ʾ", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Debug.LogError("  ע      !");
+                //MessageBox.Show("请注册人脸!", "提示", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Debug.LogError("请注册人脸!");
                 return;
             }
 
@@ -1049,17 +1055,17 @@ public class CameraTest : MonoBehaviour
             {
                 //if (picImageCompare.Image == null)
                 //{
-                //    MessageBox.Show("  ѡ  ʶ  ͼ!", "  ʾ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                //    MessageBox.Show("请选择识别图!", "提示", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 //}
                 //else
                 //{
-                //    MessageBox.Show(" ȶ ʧ ܣ ʶ  ͼδ  ȡ      ֵ!", "  ʾ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                //    MessageBox.Show("比对失败，识别图未提取到特征值!", "提示", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 //}
                 return;
             }
-            //    Ѿ     ƥ  ȶԣ  ڿ     Ƶ  ʱ  Ҫ    ȶԽ  
+            //标记已经做了匹配比对，在开启视频的时候要清除比对结果
             isCompare = true;
-            AppendText(string.Format("--------------  ʼ ȶԣ ʱ  :{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+            AppendText(string.Format("--------------开始比对，时间:{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
             for (int faceIndex = 0; faceIndex < rightImageFeatureList.Count; faceIndex++)
             {
                 float compareSimilarity = 0f;
@@ -1067,10 +1073,10 @@ public class CameraTest : MonoBehaviour
                 FaceFeature tempFaceFeature = rightImageFeatureList[faceIndex];
                 if (tempFaceFeature.featureSize <= 0)
                 {
-                    AppendText(string.Format(" ȶ       {0}            ȡʧ  ", faceIndex));
+                    AppendText(string.Format("比对人脸第{0}张人脸特征提取失败", faceIndex));
                     continue;
                 }
-                AppendText(string.Format("------  ʼƥ  ȶ       {0}      ------", faceIndex));
+                AppendText(string.Format("------开始匹配比对人脸第{0}张人脸------", faceIndex));
                 for (int i = 0; i < leftImageFeatureList.Count; i++)
                 {
                     FaceFeature feature = leftImageFeatureList[i];
@@ -1081,7 +1087,7 @@ public class CameraTest : MonoBehaviour
                     {
                         similarity = 0f;
                     }
-                    AppendText(string.Format("        {0} űȶԽ  :{1}", i, similarity));
+                    AppendText(string.Format("与人脸库{0}号比对结果:{1}", i, similarity));
                     if (similarity > compareSimilarity)
                     {
                         compareSimilarity = similarity;
@@ -1090,10 +1096,10 @@ public class CameraTest : MonoBehaviour
                 }
                 if (compareSimilarity > 0)
                 {
-                    AppendText(string.Format("-----------------------------------\r\nƥ    :{0}  , ȶԽ  :{1}", compareNum, compareSimilarity));
+                    AppendText(string.Format("-----------------------------------\r\n匹配结果:{0}号,比对结果:{1}", compareNum, compareSimilarity));
                 }
             }
-            AppendText(string.Format("-------------- ȶԽ     ʱ  :{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
+            AppendText(string.Format("--------------比对结束，时间:{0}--------------", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:ms")));
         }
         catch (Exception ex)
         {
@@ -1102,13 +1108,13 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region   Ƶ      (<    ͷ  ť    ¼       ͷPaint ¼        ȶԡ     ͷ        ¼ >)
+    #region 视频检测相关(<摄像头按钮点击事件、摄像头Paint事件、特征比对、摄像头播放完成事件>)
 
     //AForge.Controls.VideoSourcePlayer rgbVideoSource = new AForge.Controls.VideoSourcePlayer();
     //AForge.Controls.VideoSourcePlayer irVideoSource = new AForge.Controls.VideoSourcePlayer();
 
     /// <summary>
-    ///     ͷ  ť    ¼ 
+    /// 摄像头按钮点击事件
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -1116,21 +1122,21 @@ public class CameraTest : MonoBehaviour
     {
         try
         {
-            // ڵ    ʼ  ʱ       ³ ʼ    ⣬  ֹ       ʱ      ͷ   ڵ      ͷ  ť֮ǰ      ͷ ε     
+            //在点击开始的时候再坐下初始化检测，防止程序启动时有摄像头，在点击摄像头按钮之前将摄像头拔掉的情况
             initVideo();
-            //   뱣֤ п       ͷ
+            //必须保证有可用摄像头
             if (WebCamTexture.devices.Length == 0)
             {
-                //MessageBox.Show("δ  ⵽    ͷ    ȷ   Ѱ װ    ͷ      !");
-                Debug.LogError("δ  ⵽    ͷ    ȷ   Ѱ װ    ͷ      !");
+                //MessageBox.Show("未检测到摄像头，请确保已安装摄像头或驱动!");
+                Debug.LogError("未检测到摄像头，请确保已安装摄像头或驱动!");
                 return;
             }
             //if (rgbVideoSource.IsRunning || irVideoSource.IsRunning)
             if (webCamTexture.isPlaying == true)
             {
-                btnStartVideo.GetComponentInChildren<TMP_Text>().text = "        ͷ";
+                btnStartVideo.GetComponentInChildren<TMP_Text>().text = "启用摄像头";
 
-                //    // ر     ͷ
+                //    //关闭摄像头
                 //    if (irVideoSource.IsRunning)
                 //    {
                 //        irVideoSource.SignalToStop();
@@ -1142,7 +1148,8 @@ public class CameraTest : MonoBehaviour
                 //        rgbVideoSource.Hide();
                 //    }
                 webCamTexture.Stop();
-                //  ѡ  ʶ  ͼ        ʼƥ 䡱  ť   ã   ֵ ؼ     
+                //“选择识别图”、“开始匹配”按钮可用，阈值控件禁用
+
                 //ControlsEnable(true, chooseImgBtn, matchBtn, chooseMultiImgBtn, btnClearFaceList);
                 exitVideoRGBFR = true;
                 exitVideoRGBLiveness = true;
@@ -1152,7 +1159,7 @@ public class CameraTest : MonoBehaviour
             {
                 if (isCompare)
                 {
-                    // ȶԽ     
+                    //比对结果清除
                     for (int i = 0; i < leftImageFeatureList.Count; i++)
                     {
                         //imageList.Items[i].Text = string.Format("{0}  ", i);
@@ -1160,44 +1167,46 @@ public class CameraTest : MonoBehaviour
                     //lblCompareInfo.Text = string.Empty;
                     isCompare = false;
                 }
-                //  ѡ  ʶ  ͼ        ʼƥ 䡱  ť   ã   ʾ    ͷ ؼ 
+                //“选择识别图”、“开始匹配”按钮禁用，显示摄像头控件
                 //rgbVideoSource.Show();
                 //irVideoSource.Show();
                 //ControlsEnable(false, chooseImgBtn, matchBtn, chooseMultiImgBtn, btnClearFaceList);
-                btnStartVideo.GetComponentInChildren<TMP_Text>().text = " ر     ͷ";
-                //  ȡfilterInfoCollection      
+                btnStartVideo.GetComponentInChildren<TMP_Text>().text = "关闭摄像头";
+                //获取filterInfoCollection的总数
                 int maxCameraCount = WebCamTexture.devices.Length;
-                //               ͬ      ͷ    
+                //如果配置了两个不同的摄像头索引
                 if (rgbCameraIndex != irCameraIndex && maxCameraCount >= 2)
                 {
-                    //RGB    ͷ    
+                    //RGB摄像头加载
                     rgbDeviceVideo = new VideoCaptureDevice(filterInfoCollection[rgbCameraIndex < maxCameraCount ? rgbCameraIndex : 0].MonikerString);
                     //rgbVideoSource.VideoSource = rgbDeviceVideo;
                     //rgbVideoSource.Start();
                     webCamTexture.Play();
 
-                    //IR    ͷ
+                    //IR摄像头
                     irDeviceVideo = new VideoCaptureDevice(filterInfoCollection[irCameraIndex < maxCameraCount ? irCameraIndex : 0].MonikerString);
                     //irVideoSource.VideoSource = irDeviceVideo;
                     //irVideoSource.Start();
                     //webCamTexture2.Play();
 
-                    //˫   ־  Ϊtrue
+                    //双摄标志设为true
                     isDoubleShot = true;
-                    //       ߳ 
+                    //启动检测线程
                     exitVideoIRFRLiveness = false;
                     videoIRLiveness();
                 }
                 else
                 {
-                    //    RGB    ͷ  IR    ͷ ؼ     
-                    rgbDeviceVideo = new VideoCaptureDevice(filterInfoCollection[rgbCameraIndex <= maxCameraCount ? rgbCameraIndex : 0].MonikerString);
+                    //仅打开RGB摄像头，IR摄像头控件隐藏
+                    //rgbDeviceVideo = new VideoCaptureDevice(filterInfoCollection[rgbCameraIndex <= maxCameraCount ? rgbCameraIndex : 0].MonikerString);
+
                     //rgbVideoSource.VideoSource = rgbDeviceVideo;
                     //rgbVideoSource.Start();
                     //irVideoSource.Hide();
                     webCamTexture.Play();
                 }
-                //           ߳ 
+
+                //
                 exitVideoRGBFR = false;
                 exitVideoRGBLiveness = false;
                 videoRGBLiveness();
@@ -1210,23 +1219,100 @@ public class CameraTest : MonoBehaviour
         }
     }
 
+    private Bitmap ConvertToBitmap(Color32[] pixels, int width, int height)
+    {
+        // 1. 分配字节数组（每个像素4字节，ARGB格式）
+        byte[] byteArray = new byte[pixels.Length * 4];
+
+        // 2. 转换Color32（RGBA）到ARGB格式
+        // Color32的顺序是：r, g, b, a
+        // Bitmap的ARGB格式字节顺序是：b, g, r, a（因为内部是BGRA存储）
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            int index = i * 4;
+            byteArray[index] = pixels[i].b;       // 蓝色通道
+            byteArray[index + 1] = pixels[i].g;   // 绿色通道
+            byteArray[index + 2] = pixels[i].r;   // 红色通道
+            byteArray[index + 3] = pixels[i].a;   // Alpha通道
+        }
+
+        // 3. 处理摄像头纹理可能的上下翻转（WebCamTexture常出现）
+        if (!webCamTexture.videoVerticallyMirrored)
+        {
+            FlipPixelsVertically(byteArray, width, height, 4); // 4字节/像素
+        }
+
+        // 4. 创建Bitmap（像素格式为32位ARGB）
+        Bitmap bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        BitmapData bmpData = bitmap.LockBits(
+            new Rectangle(0, 0, width, height),
+            ImageLockMode.WriteOnly,
+            bitmap.PixelFormat
+        );
+
+        // 5. 将字节数组复制到Bitmap的内存中
+        Marshal.Copy(byteArray, 0, bmpData.Scan0, byteArray.Length);
+        bitmap.UnlockBits(bmpData);
+
+        return bitmap;
+    }
+
+    // 上下翻转像素（解决摄像头纹理颠倒问题）
+    private void FlipPixelsVertically(byte[] pixels, int width, int height, int bytesPerPixel)
+    {
+        int rowSize = width * bytesPerPixel;
+        byte[] tempRow = new byte[rowSize];
+        for (int i = 0; i < height / 2; i++)
+        {
+            int topRowIndex = i * rowSize;
+            int bottomRowIndex = (height - 1 - i) * rowSize;
+
+            // 交换上下行
+            System.Array.Copy(pixels, topRowIndex, tempRow, 0, rowSize);
+            System.Array.Copy(pixels, bottomRowIndex, pixels, topRowIndex, rowSize);
+            System.Array.Copy(tempRow, 0, pixels, bottomRowIndex, rowSize);
+        }
+    }
+
+    public static Texture2D CreateTransparentTextureFast(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            Debug.LogError("Invalid size!");
+            return null;
+        }
+
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        // 每个像素4字节（RGBA），全0即透明
+        byte[] transparentData = new byte[width * height * 4];
+        texture.LoadRawTextureData(transparentData);
+        texture.Apply();
+
+        return texture;
+    }
+
     /// <summary>
-    /// RGB    ͷPaint ¼   ͼ    ʾ       ϣ  õ ÿһ֡ͼ 񣬲    д   
+    /// RGB摄像头Paint事件，图像显示到窗体上，得到每一帧图像，并进行处理
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
-    private void videoSource_Paint(object sender)
+    private void videoSource_Paint(object sender, EventArgs e)
     {
         try
         {
             //if (!rgbVideoSource.IsRunning)
+            if (!webCamTexture.isPlaying)
             {
                 return;
             }
-            // õ   ǰRGB    ͷ µ ͼƬ
+
+            rawImageDisplay.texture = CreateTransparentTextureFast(webCamTexture.width, webCamTexture.height);
+
+            //得到当前RGB摄像头下的图片
             lock (rgbVideoImageLocker)
             {
-                //rgbVideoBitmap = rgbVideoSource.GetCurrentVideoFrame();
+                rgbVideoBitmap = ConvertToBitmap(webCamTexture.GetPixels32(), webCamTexture.width, webCamTexture.height);
+                //rgbVideoBitmap.Save("test.png", ImageFormat.Png);
             }
             Bitmap bitmapClone = null;
             try
@@ -1243,29 +1329,29 @@ public class CameraTest : MonoBehaviour
                 {
                     return;
                 }
-                //          õ Rect  
+                //检测人脸，得到Rect框
                 MultiFaceInfo multiFaceInfo = FaceUtil.DetectFaceAndLandMark(videoEngine, bitmapClone);
-                //δ  ⵽    
+                //未检测到人脸
                 if (multiFaceInfo.faceNum <= 0)
                 {
                     trackRGBUnitDict.ClearAllElement();
                     return;
                 }
-                //Graphics g = e.Graphics;
-                //float offsetX = rgbVideoSource.Width * 1f / bitmapClone.Width;
-                //float offsetY = rgbVideoSource.Height * 1f / bitmapClone.Height;
+                Graphics g = Graphics.FromImage(bitmapClone);
+                float offsetX = webCamTexture.width * 1f / bitmapClone.Width;
+                float offsetY = webCamTexture.height * 1f / bitmapClone.Height;
                 List<int> tempIdList = new List<int>();
                 for (int faceIndex = 0; faceIndex < multiFaceInfo.faceNum; faceIndex++)
                 {
                     MRECT mrect = multiFaceInfo.faceRects[faceIndex];
-                    //float x = mrect.left * offsetX;
-                    //float width = mrect.right * offsetX - x;
-                    //float y = mrect.top * offsetY;
-                    //float height = mrect.bottom * offsetY - y;
+                    float x = mrect.left * offsetX;
+                    float width = mrect.right * offsetX - x;
+                    float y = mrect.top * offsetY;
+                    float height = mrect.bottom * offsetY - y;
                     int faceId = multiFaceInfo.faceID[faceIndex];
                     FaceTrackUnit currentFaceTrack = trackRGBUnitDict.GetElementByKey(faceId);
-                    //    Rect   л   
-                    //    һ֡       ʾ  ҳ    
+                    //根据Rect进行画框
+                    //将上一帧检测结果显示到页面上
                     lock (rgbVideoImageLocker)
                     {
                         if (multiFaceInfo.pointAyy != null && multiFaceInfo.pointAyy.Length > 0)
@@ -1278,29 +1364,29 @@ public class CameraTest : MonoBehaviour
                                 {
                                     for (int markIndex = 0; markIndex < markAyy.Length; markIndex++)
                                     {
-                                        //points[markIndex].X = markAyy[markIndex].x * offsetX;
-                                        //points[markIndex].Y = markAyy[markIndex].y * offsetY;
+                                        points[markIndex].X = markAyy[markIndex].x * offsetX;
+                                        points[markIndex].Y = markAyy[markIndex].y * offsetY;
                                     }
                                 }
-                                //g.DrawPolygon(Pens.Blue, points);
+                                g.DrawPolygon(Pens.Blue, points);
                             }
                         }
                         if (currentFaceTrack != null)
                         {
-                            //g.DrawRectangle(currentFaceTrack.CertifySuccess() ? Pens.Green : Pens.Red, x, y, width, height);
-                            //if (!string.IsNullOrWhiteSpace(currentFaceTrack.GetCombineMessage()) && x > 0 && y > 0)
+                            g.DrawRectangle(currentFaceTrack.CertifySuccess() ? Pens.Green : Pens.Red, x, y, width, height);
+                            if (!string.IsNullOrWhiteSpace(currentFaceTrack.GetCombineMessage()) && x > 0 && y > 0)
                             {
-                                //g.DrawString(currentFaceTrack.GetCombineMessage(), font, currentFaceTrack.CertifySuccess() ? greenBrush : redBrush, x, y - 15);
+                                g.DrawString(currentFaceTrack.GetCombineMessage(), font, currentFaceTrack.CertifySuccess() ? greenBrush : redBrush, x, y - 15);
                             }
                         }
                         else
                         {
-                            //g.DrawRectangle(Pens.Red, x, y, width, height);
+                            g.DrawRectangle(Pens.Red, x, y, width, height);
                         }
                     }
                     if (faceId >= 0)
                     {
-                        // ж faceid Ƿ            
+                        //
                         if (!rgbFeatureTryDict.ContainsKey(faceId))
                         {
                             rgbFeatureTryDict.AddDictionaryElement(faceId, 0);
@@ -1321,12 +1407,21 @@ public class CameraTest : MonoBehaviour
                         }
                         tempIdList.Add(faceId);
                     }
-
                 }
-                //  ʼ    ˢ ´        , Ƴ          
+
+                using (System.IO.MemoryStream stream = new System.IO.MemoryStream())
+                {
+                    bitmapClone.Save(stream, ImageFormat.Png); // 保存为PNG到内存流
+                    byte[] data666 = stream.ToArray();
+                    Texture2D texture666 = new Texture2D(2, 2);
+                    texture666.LoadImage(data666); // 自动处理格式
+                    rawImageDisplay.texture = texture666;
+                }
+
+                //初始化及刷新待处理队列,移除出框的人脸
                 rgbFeatureTryDict.RefershElements(tempIdList);
                 rgbLivenessTryDict.RefershElements(tempIdList);
-                trackRGBUnitDict.RefershElements(tempIdList);
+                trackRGBUnitDict.RefershElements(tempIdList);    
             }
             catch (Exception ee)
             {
@@ -1347,7 +1442,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///        ߳ 
+    /// 活体检测线程
     /// </summary>
     private void videoRGBLiveness()
     {
@@ -1371,30 +1466,30 @@ public class CameraTest : MonoBehaviour
                     }
                     List<int> faceIdList = new List<int>();
                     faceIdList.AddRange(rgbLivenessTryDict.GetAllElement().Keys);
-                    //        Id     л     
+                    //遍历人脸Id，进行活体检测
                     foreach (int tempFaceId in faceIdList)
                     {
-                        //          в    ڣ  Ƴ 
+                        //待处理队列中不存在，移除
                         if (!rgbLivenessTryDict.ContainsKey(tempFaceId))
                         {
                             continue;
                         }
-                        //   ڳ  Դ      Ƴ 
+                        //大于尝试次数，移除
                         int tryTime = rgbLivenessTryDict.GetElementByKey(tempFaceId);
                         if (tryTime >= liveMatchTime)
                         {
                             continue;
                         }
                         tryTime += 1;
-                        // ޶ Ӧ          Ϣ
+                        //无对应的人脸框信息
                         if (!trackRGBUnitDict.ContainsKey(tempFaceId))
                         {
                             continue;
                         }
                         FaceTrackUnit tempFaceTrack = trackRGBUnitDict.GetElementByKey(tempFaceId);
 
-                        //RGB      
-                        Console.WriteLine(string.Format("faceId:{0},       {1}  \r\n", tempFaceId, tryTime));
+                        //RGB活体检测
+                        Console.WriteLine(string.Format("faceId:{0},活体检测第{1}次\r\n", tempFaceId, tryTime));
                         SingleFaceInfo singleFaceInfo = new SingleFaceInfo();
                         singleFaceInfo.faceOrient = tempFaceTrack.FaceOrient;
                         singleFaceInfo.faceRect = tempFaceTrack.Rect;
@@ -1412,7 +1507,7 @@ public class CameraTest : MonoBehaviour
                             }
                             int retCodeLiveness = -1;
                             LivenessInfo liveInfo = FaceUtil.LivenessInfo_RGB(videoRGBImageEngine, bitmapClone, singleFaceInfo, out retCodeLiveness);
-                            //   »       
+                            //更新活体检测结果
                             if (retCodeLiveness.Equals(0) && liveInfo.num > 0 && trackRGBUnitDict.ContainsKey(tempFaceId))
                             {
                                 trackRGBUnitDict.GetElementByKey(tempFaceId).RgbLiveness = liveInfo.isLive[0];
@@ -1445,7 +1540,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///       ȡ       ߳ 
+    /// 特征提取和搜索线程
     /// </summary>
     private void videoRGBFR()
     {
@@ -1461,7 +1556,7 @@ public class CameraTest : MonoBehaviour
                 {
                     continue;
                 }
-                //         Ϊ  ʱ     ý           
+                //左侧人脸库为空时，不用进行特征搜索
                 if (leftImageFeatureList.Count <= 0)
                 {
                     continue;
@@ -1476,29 +1571,29 @@ public class CameraTest : MonoBehaviour
                     faceIdList.AddRange(rgbFeatureTryDict.GetAllElement().Keys);
                     foreach (int tempFaceId in faceIdList)
                     {
-                        //          в    ڣ  Ƴ 
+                        //待处理队列中不存在，移除
                         if (!rgbFeatureTryDict.ContainsKey(tempFaceId))
                         {
                             continue;
                         }
-                        //   ڳ  Դ      Ƴ 
+                        //大于尝试次数，移除
                         int tryTime = rgbFeatureTryDict.GetElementByKey(tempFaceId);
                         if (tryTime >= frMatchTime)
                         {
                             continue;
                         }
-                        // ޶ Ӧ          Ϣ
+                        //无对应的人脸框信息
                         if (!trackRGBUnitDict.ContainsKey(tempFaceId))
                         {
                             continue;
                         }
                         FaceTrackUnit tempFaceTrack = trackRGBUnitDict.GetElementByKey(tempFaceId);
                         tryTime += 1;
-                        //        
+                        //特征搜索
                         int faceIndex = -1;
                         float similarity = 0f;
-                        Console.WriteLine(string.Format("faceId:{0},          {1}  \r\n", tempFaceId, tryTime));
-                        //  ȡ        
+                        Console.WriteLine(string.Format("faceId:{0},特征搜索第{1}次\r\n", tempFaceId, tryTime));
+                        //提取人脸特征
                         SingleFaceInfo singleFaceInfo = new SingleFaceInfo();
                         singleFaceInfo.faceOrient = tempFaceTrack.FaceOrient;
                         singleFaceInfo.faceRect = tempFaceTrack.Rect;
@@ -1514,34 +1609,34 @@ public class CameraTest : MonoBehaviour
                                 }
                                 bitmapClone = (Bitmap)rgbVideoBitmap.Clone();
 
-                                //        Bitmap ͬ ߴ   Texture2D  Ĭ  ʹ   RGBA32   ʽ  ֧  ͸    
+                                //
                                 Texture2D texture = new Texture2D(bitmapClone.Width, bitmapClone.Height, TextureFormat.RGBA32, false);
 
-                                //      Bitmap          ݣ   ȡԭʼ ֽ     
+                                //
                                 Rectangle rect = new Rectangle(0, 0, bitmapClone.Width, bitmapClone.Height);
                                 BitmapData bmpData = bitmapClone.LockBits(rect, ImageLockMode.ReadOnly, bitmapClone.PixelFormat);
 
-                                //            ݴ С  ÿ   ֽ        ߶ȣ 
+                                //
                                 int byteCount = bmpData.Stride * bitmapClone.Height;
                                 byte[] bitmapBytes = new byte[byteCount];
 
-                                //    Bitmap        ݸ  Ƶ  ֽ     
+                                //
                                 System.Runtime.InteropServices.Marshal.Copy(bmpData.Scan0, bitmapBytes, 0, byteCount);
 
-                                //      Bitmap
+                                //
                                 bitmapClone.UnlockBits(bmpData);
 
-                                // ע ⣺Bitmap      ظ ʽ       BGR    BGRA     Unity  ڴ      RGBA    Ҫת  ͨ  
-                                //    磺   BGR ת  Ϊ RGB     BGRA ת  Ϊ RGBA
+                                //
+                                //
                                 for (int i = 0; i < bitmapBytes.Length; i += 4)
                                 {
-                                    byte temp = bitmapBytes[i];          //      B ͨ  ֵ
-                                    bitmapBytes[i] = bitmapBytes[i + 2]; // R ͨ   滻 B ͨ  
-                                    bitmapBytes[i + 2] = temp;          // B ͨ   滻 R ͨ  
-                                                                        //      A ͨ    i+3        ת  
+                                    byte temp = bitmapBytes[i];          //
+                                    bitmapBytes[i] = bitmapBytes[i + 2]; //
+                                    bitmapBytes[i + 2] = temp;          //
+                                                                        //
                                 }
 
-                                //          ֽ       ص  Texture2D
+                                //
                                 texture.LoadRawTextureData(bitmapBytes);
                                 texture.Apply();
 
@@ -1552,9 +1647,9 @@ public class CameraTest : MonoBehaviour
                             {
                                 break;
                             }
-                            //        
+                            //特征搜索
                             faceIndex = compareFeature(feature, out similarity);
-                            //   ±ȶԽ  
+                            //更新比对结果
                             if (trackRGBUnitDict.ContainsKey(tempFaceId))
                             {
                                 trackRGBUnitDict.GetElementByKey(tempFaceId).SetFaceIndexAndSimilarity(faceIndex, similarity.ToString("#0.00"));
@@ -1587,7 +1682,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    /// IR    ͷPaint ¼ ,ͬ  RGB     򣬶Ա           IR      
+    /// IR摄像头Paint事件,同步RGB人脸框，对比人脸框后进行IR活体检测
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -1599,7 +1694,7 @@ public class CameraTest : MonoBehaviour
             {
                 return;
             }
-            //   ˫ 㣬  IR    ͷ        ȡIR    ͷͼƬ
+            //如果双摄，且IR摄像头工作，获取IR摄像头图片
             lock (irVideoImageLocker)
             {
                 //irVideoBitmap = irVideoSource.GetCurrentVideoFrame();
@@ -1619,20 +1714,20 @@ public class CameraTest : MonoBehaviour
                 {
                     return;
                 }
-                //У  ͼƬ   
+                //校验图片宽高
                 CheckBitmapWidthAndHeight(ref irBmpClone);
-                //          õ Rect  
+                //检测人脸，得到Rect框
                 MultiFaceInfo multiFaceInfo = FaceUtil.DetectFaceIR(videoIRImageEngine, irBmpClone);
                 if (multiFaceInfo.faceNum <= 0)
                 {
                     trackIRUnit.FaceId = -1;
                     return;
                 }
-                // õ        
+                //得到最大人脸
                 SingleFaceInfo irMaxFace = FaceUtil.GetMaxFace(multiFaceInfo);
-                // õ Rect
+                //得到Rect
                 MRECT rect = irMaxFace.faceRect;
-                //   RGB    ͷ         
+                //检测RGB摄像头下最大人脸
                 //Graphics g = e.Graphics;
                 //float offsetX = irVideoSource.Width * 1f / irBmpClone.Width;
                 //float offsetY = irVideoSource.Height * 1f / irBmpClone.Height;
@@ -1640,13 +1735,13 @@ public class CameraTest : MonoBehaviour
                 //float width = rect.right * offsetX - x;
                 //float y = rect.top * offsetY;
                 //float height = rect.bottom * offsetY - y;
-                //    Rect   л   
+                //根据Rect进行画框
                 lock (irVideoImageLocker)
                 {
                     //g.DrawRectangle(trackIRUnit.IrLiveness.Equals(1) ? Pens.Green : Pens.Red, x, y, width, height);
                     //if (!string.IsNullOrWhiteSpace(trackIRUnit.GetIrLivenessMessage()) && x > 0 && y > 0)
                     {
-                        //    һ֡       ʾ  ҳ    
+                        //将上一帧检测结果显示到页面上
                         //g.DrawString(trackIRUnit.GetIrLivenessMessage(), font, trackIRUnit.IrLiveness.Equals(1) ? greenBrush : redBrush, x, y - 15);
                     }
                 }
@@ -1673,7 +1768,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    /// IR       ߳ 
+    /// IR活体检测线程
     /// </summary>
     private void videoIRLiveness()
     {
@@ -1738,7 +1833,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///  õ feature ȽϽ  
+    /// 得到feature比较结果
     /// </summary>
     /// <param name="feature"></param>
     /// <returns></returns>
@@ -1748,12 +1843,12 @@ public class CameraTest : MonoBehaviour
         similarity = 0f;
         try
         {
-            //        ⲻΪ գ          ƥ  
+            //如果人脸库不为空，则进行人脸匹配
             if (leftImageFeatureList != null && leftImageFeatureList.Count > 0)
             {
                 for (int i = 0; i < leftImageFeatureList.Count; i++)
                 {
-                    //        ƥ ䷽        ƥ  
+                    //调用人脸匹配方法，进行匹配
                     videoRGBImageEngine.ASFFaceFeatureCompare(feature, leftImageFeatureList[i], out similarity, compareModel);
                     if (similarity >= threshold)
                     {
@@ -1771,7 +1866,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///     ͷ        ¼ 
+    /// 摄像头播放完成事件
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="reason"></param>
@@ -1793,9 +1888,9 @@ public class CameraTest : MonoBehaviour
 
     #endregion
 
-    #region       ֵ   
+    #region 界面阈值相关
     /// <summary>
-    ///   ֵ ı         ¼               Ƿ   ȷ      ȷ        
+    /// 阈值文本框键按下事件，检测输入内容是否正确，不正确不能输入
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -1803,26 +1898,26 @@ public class CameraTest : MonoBehaviour
     {
         try
         {
-            //  ֹ Ӽ        
+            //阻止从键盘输入键
             //e.Handled = true;
-            //    ֵ       ˼   .     룬            
+            //是数值键，回退键，.能输入，其他不能输入
             //if (char.IsDigit(e.KeyChar) || e.KeyChar == 8 || e.KeyChar == '.')
             {
-                //      ǰ ı        
+                //渠道当前文本框的内容
                 string thresholdStr = "0";// txtThreshold.Text.Trim();
                 int countStr = 0;
                 int startIndex = 0;
-                //     ǰ          Ƿ  ǡ .  
+                //如果当前输入的内容是否是“.”
                 //if (e.KeyChar == '.')
                 {
                     countStr = 1;
                 }
-                //  ⵱ǰ     Ƿ   . ĸ   
+                //检测当前内容是否含有.的个数
                 if (thresholdStr.IndexOf('.', startIndex) > -1)
                 {
                     countStr += 1;
                 }
-                //             Ѿ     12   ַ   
+                //如果输入的内容已经超过12个字符，
                 //if (e.KeyChar != 8 && (thresholdStr.Length > 12 || countStr > 1))
                 {
                     return;
@@ -1837,27 +1932,27 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///      ȶ   ֵ ı    ̧   ¼        ֵ Ƿ   ȷ      ȷ  Ϊ0.8f
+    /// 人脸比对阈值文本框键抬起事件，检测阈值是否正确，不正确改为0.8f
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
     private void txtThreshold_KeyUp(object sender)
     {
         //textBoxKeyUp(txtThreshold, ref threshold, 0.80f);
-        AppendText(string.Format("      Ƶģʽ ȶ   ֵ ɹ ,  ֵ:{0}", threshold));
+        AppendText(string.Format("更新视频模式比对阈值成功,阈值:{0}", threshold));
     }
 
     /// <summary>
-    ///     (IR)      ֵ ı   ̧   ¼       ȷ  ΪĬ  ֵ
+    /// 红外(IR)活体阈值文本框抬起事件，不正确改为默认值
     /// </summary>
     private void txtIr_KeyUp(object sender)
     {
         try
         {
             //textBoxKeyUp(txtIr, ref thresholdIr, 0.7f);
-            //   »     ֵ
+            //更新活体阈值
             int retCode = videoRGBImageEngine.ASFSetLivenessParam(thresholdIr);
-            AppendText(string.Format("   º   (IR)      ֵ{0},  ֵ:{1}", retCode.Equals(0) ? " ɹ " : "ʧ  , ӿڷ   ֵ" + retCode, thresholdIr));
+            AppendText(string.Format("更新红外(IR)活体阈值{0},阈值:{1}", retCode.Equals(0) ? "成功" : "失败,接口返回值" + retCode, thresholdIr));
         }
         catch (Exception ex)
         {
@@ -1867,16 +1962,16 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///  ɼ   (RGB)      ֵ ı   ̧   ¼       ȷ  ΪĬ  ֵ
+    /// 可见光(RGB)活体阈值文本框抬起事件，不正确改为默认值
     /// </summary>
     private void txtRgb_KeyUp(object sender)
     {
         try
         {
             //textBoxKeyUp(txtRgb, ref thresholdRgb, 0.5f);
-            //   »     ֵ
+            //更新活体阈值
             int retCode = videoRGBImageEngine.ASFSetLivenessParam(thresholdRgb);
-            AppendText(string.Format("   ¿ɼ   (RGB)      ֵ{0},  ֵ:{1}", retCode.Equals(0) ? " ɹ " : "ʧ  , ӿڷ   ֵ" + retCode, thresholdRgb));
+            AppendText(string.Format("更新可见光(RGB)活体阈值{0},阈值:{1}", retCode.Equals(0) ? "成功" : "失败,接口返回值" + retCode, thresholdRgb));
         }
         catch (Exception ex)
         {
@@ -1885,43 +1980,43 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///ͼ      ע    ֵ ı   ̧   ¼       ȷ  ΪĬ  ֵ
+    ///图像质量注册阈值文本框抬起事件，不正确改为默认值
     /// </summary>
     private void txtImgQua_KeyUp(object sender)
     {
         //textBoxKeyUp(txtImgQua, ref thresholdImgRegister, 0.63f);
-        AppendText(string.Format("    ͼ      ע    ֵ ɹ ,  ֵ:{0}", thresholdImgRegister));
+        AppendText(string.Format("更新图像质量注册阈值成功,阈值:{0}", thresholdImgRegister));
     }
 
     /// <summary>
-    /// ͼ      ʶ         ֵ ı   ̧   ¼       ȷ  ΪĬ  ֵ
+    /// 图像质量识别戴口罩阈值文本框抬起事件，不正确改为默认值
     /// </summary>
     private void txtImgMask_KeyUp(object sender)
     {
         //textBoxKeyUp(txtImgMask, ref thresholdImgMask, 0.49f);
-        AppendText(string.Format("    ͼ      ʶ         ֵ ɹ ,  ֵ:{0}", thresholdImgMask));
+        AppendText(string.Format("更新图像质量识别戴口罩阈值成功,阈值:{0}", thresholdImgMask));
     }
 
     /// <summary>
-    /// ͼ      ʶ  δ        ֵ ı   ̧   ¼       ȷ  ΪĬ  ֵ
+    /// 图像质量识别未戴口罩阈值文本框抬起事件，不正确改为默认值
     /// </summary>
     private void txtImgNoMask_KeyUp(object sender)
     {
         //textBoxKeyUp(txtImgNoMask, ref thresholdImgNoMask, 0.29f);
-        AppendText(string.Format("    ͼ      ʶ  δ        ֵ ɹ ,  ֵ:{0}", thresholdImgNoMask));
+        AppendText(string.Format("更新图像质量识别未戴口罩阈值成功,阈值:{0}", thresholdImgNoMask));
     }
 
     /// <summary>
-    /// ̧   ¼     
+    /// 抬起事件处理
     /// </summary>
-    /// <param name="textBox"> ı      </param>
-    /// <param name="value">  ֵ    </param>
-    /// <param name="defaultValue">Ĭ  ֵ</param>
+    /// <param name="textBox">文本框对象</param>
+    /// <param name="value">阈值对象</param>
+    /// <param name="defaultValue">默认值</param>
     private void textBoxKeyUp(ref float value, float defaultValue)
     {
         try
         {
-            //           ݲ   ȷ  ΪĬ  ֵ
+            //如果输入的内容不正确改为默认值
             //if (!float.TryParse(textBox.Text.Trim(), out value))
             {
                 value = defaultValue;
@@ -1943,9 +2038,9 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region     ر 
+    #region 窗体关闭
     /// <summary>
-    ///     ر  ¼ 
+    /// 窗体关闭事件
     /// </summary>
     private void Form_Closed(object sender)
     {
@@ -1953,7 +2048,7 @@ public class CameraTest : MonoBehaviour
         {
             //if (rgbVideoSource.IsRunning)
             {
-                btnStartVideo_Click(sender, new EventArgs()); // ر     ͷ
+                btnStartVideo_Click(sender, new EventArgs()); //关闭摄像头
             }
             Environment.Exit(0);
         }
@@ -1964,12 +2059,12 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region    ÷   
+    #region 公用方法
     /// <summary>
-    ///  ָ ʹ  /   ÿؼ  б ؼ 
+    /// 恢复使用/禁用控件列表控件
     /// </summary>
     /// <param name="isEnable"></param>
-    /// <param name="controls"> ؼ  б </param>
+    /// <param name="controls">控件列表</param>
     private void ControlsEnable(bool isEnable)
     {
         try
@@ -1990,7 +2085,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    /// У  ͼƬ
+    /// 校验图片
     /// </summary>
     /// <param name="imagePath"></param>
     /// <returns></returns>
@@ -2000,12 +2095,12 @@ public class CameraTest : MonoBehaviour
         {
             if (imagePath == null)
             {
-                AppendText("ͼƬ     ڣ   ȷ Ϻ  ٵ   ");
+                AppendText("图片不存在，请确认后再导入");
                 return false;
             }
             try
             {
-                // ж ͼƬ Ƿ        罫     ļ  Ѻ ׺  Ϊ.jpg       ͻᱨ  
+                // 判断图片是否正常，如将其他文件把后缀改为.jpg，这样就会报错
                 Image image = ImageUtil.ReadFromFile(imagePath);
                 if (image == null)
                 {
@@ -2018,23 +2113,23 @@ public class CameraTest : MonoBehaviour
             }
             catch
             {
-                AppendText(string.Format("{0} ͼƬ  ʽ     ⣬  ȷ Ϻ  ٵ   ", imagePath));
+                AppendText(string.Format("{0} 图片格式有问题，请确认后再导入", imagePath));
                 return false;
             }
             FileInfo fileCheck = new FileInfo(imagePath);
             if (!fileCheck.Exists)
             {
-                AppendText(string.Format("{0}       ", fileCheck.Name));
+                AppendText(string.Format("{0} 不存在", fileCheck.Name));
                 return false;
             }
             else if (fileCheck.Length > maxSize)
             {
-                AppendText(string.Format("{0} ͼƬ  С    2M    ѹ     ٵ   ", fileCheck.Name));
+                AppendText(string.Format("{0} 图片大小超过2M，请压缩后再导入", fileCheck.Name));
                 return false;
             }
             else if (fileCheck.Length < 2)
             {
-                AppendText(string.Format("{0} ͼ      ̫С        ѡ  ", fileCheck.Name));
+                AppendText(string.Format("{0} 图像质量太小，请重新选择", fileCheck.Name));
                 return false;
             }
         }
@@ -2046,7 +2141,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    /// ׷ ӹ  ÷   
+    /// 追加公用方法
     /// </summary>
     /// <param name="message"></param>
     private void AppendText(string message)
@@ -2063,7 +2158,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///    ͼƬ   
+    /// 检查图片宽高
     /// </summary>
     /// <param name="image"></param>
     /// <returns></returns>
@@ -2087,7 +2182,7 @@ public class CameraTest : MonoBehaviour
     }
 
     /// <summary>
-    ///    ͼƬ   
+    /// 检查图片宽高
     /// </summary>
     /// <param name="bitmap"></param>
     /// <returns></returns>
@@ -2111,20 +2206,20 @@ public class CameraTest : MonoBehaviour
     }
     #endregion
 
-    #region  л  ȶ ģʽ            Ϣ ļ  Ͱ汾  Ϣ
+    #region 切换比对模式、导出激活信息文件和版本信息
     /// <summary>
-    ///     -   ʺ      -        
+    /// 帮助-访问虹软官网-帮助中心
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
     private void FaceForm_HelpButtonClicked(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        //     Ӿ     ƽ̨-        
+        // 虹软视觉开放平台-帮助中心
         System.Diagnostics.Process.Start("https://ai.arcsoft.com.cn/ucenter/resource/build/index.html#/help");
     }
 
     /// <summary>
-    ///  л  ȶ ģʽ
+    /// 切换比对模式
     /// </summary>
     private void btnCompareModel_Click(object sender, EventArgs e)
     {
@@ -2137,11 +2232,11 @@ public class CameraTest : MonoBehaviour
         {
             compareModel = ASF_CompareModel.ASF_LIFE_PHOTO;
         }
-        AppendText(string.Format("  ǰ ȶ ģʽ:{0}", isIdMode ? "ASF_ID_PHOTO" : "ASF_LIFE_PHOTO"));
+        AppendText(string.Format("当前比对模式:{0}", isIdMode ? "ASF_ID_PHOTO" : "ASF_LIFE_PHOTO"));
     }
 
     /// <summary>
-    ///           Ϣ ļ  Ͱ汾  Ϣ
+    /// 导出激活信息文件和版本信息
     /// </summary>
     private void picExport_Click(object sender, EventArgs e)
     {
@@ -2153,12 +2248,12 @@ public class CameraTest : MonoBehaviour
             imageEngine.ASFGetVersion(out sdkVersion);
             if (retCode != 0)
             {
-                //MessageBox.Show("  ȡ     ļ   Ϣʧ  ,      :" + retCode);
+                //MessageBox.Show("获取激活文件信息失败,错误码:" + retCode);
                 return;
             }
             //SaveFileDialog sfd = new SaveFileDialog();
-            //sfd.Filter = " ı  ļ   *.txt  |*.txt";
-            //sfd.Title = "   漤   ļ   SDK 汾  Ϣ";
+            //sfd.Filter = "文本文件（*.txt）|*.txt";
+            //sfd.Title = "保存激活文件和SDK版本信息";
             //sfd.FilterIndex = 1;
             //sfd.RestoreDirectory = true;
             //sfd.FileName = "ActiveFileAndSdkVersionInfo.txt";

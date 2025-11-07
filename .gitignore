@@ -1,1 +1,10 @@
 .plastic/
+Library/
+Logs/
+Temp/
+UserSettings/
+.vsconfig
+obj/
+.vs/
+.cr/
+ArcFacePro64.dat
